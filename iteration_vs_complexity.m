@@ -2,8 +2,8 @@
 %solve each problem with a predictor-corrector with short-step 
 %and with a predictor-corrector with no centrality constraints
 
-sizes = [100:100:1000];
-samples = 10;
+sizes = [100:100:3000];
+samples = 20;
 
 results = zeros(length(sizes)*samples,4);
 result_ix = 1;
