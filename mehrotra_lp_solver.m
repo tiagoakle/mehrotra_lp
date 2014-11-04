@@ -250,7 +250,7 @@ function opts = get_default_options(opts)
             opts.use_functional = true;
             opts.secord = false;
         elseif(strcmp(opts.centrality_type,'2norm')==1)
-            if(~isfield(opts,'centrality')) opts.centrality = 1; end
+            if(~isfield(opts,'centrality')) opts.centrality = 0.5; end
             opts.use_functional = false;
         end
     else
