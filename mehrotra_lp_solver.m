@@ -1,6 +1,15 @@
 %Minimal implementation of a mehrotra lp solver
-function [x,y,s,info] = mehrotra_lp_solver(A,b,c)
 
+% the opts structure contains the following options 
+% opts.max_iter % maximum number of iterations 
+% opts.centrality one of none functional 2norm 
+%                 none uses a long-step method 
+%                 functional keeps nu log (x's) + f(x) + f(s) - nulog(nu) + nu < centrality
+%                 2norm keeps ||Xz-mu||_2 \leq centrality
+% opts.ini_mehrotra true uses merhotras initialization (defaults to false if cetnrality is not none)
+
+function [x,y,s,info] = mehrotra_lp_solver(A,b,c,opts) 
+   
     warning('off','MATLAB:nearlySingularMatrix');
 
     fprintf('Minimal mehrotra type solver \n');
@@ -11,24 +20,38 @@ function [x,y,s,info] = mehrotra_lp_solver(A,b,c)
     nu    = n;
     fprintf('Problem size %i constraints %i variables \n',m,n);
     %-----------------------------------
-    %Initialization strategy from CVXOPT
-    K2  = [[speye(n), A'];[A,sparse(m,m)]];
-    sol = K2\[zeros(n,1);b];
-    x   = sol(1:n);
     
-    K2  = [[speye(n), A'];[A,sparse(m,m)]];
-    sol = K2\[c;zeros(m,1)];
-    y   = sol(n+1:n+m);
-    s   = sol(1:n);
+    if(nargin == 3)
+        opts = struct;
+    end
+    opts = get_default_options(opts);
     
-    %%XXX:RANDOM INIT
-    %x   = ones(n,1);
-    %s   = ones(n,1);
-    %y   = zeros(m,1);
-    
+    if(~opts.use_centrality)
+        bk_iter_predictor = 0;
+        bk_iter_corrector = 0;
+    end 
+    fprintf('\t Centrality %s, \n \t Initialization Mehrotra %g \n',opts.centrality_type,opts.ini_mehrotra);
+         
+    if(opts.ini_mehrotra)
+        %Initialization strategy from CVXOPT
+        K2  = [[speye(n), A'];[A,sparse(m,m)]];
+        sol = K2\[zeros(n,1);b];
+        x   = sol(1:n);
+        
+        K2  = [[speye(n), A'];[A,sparse(m,m)]];
+        sol = K2\[c;zeros(m,1)];
+        y   = sol(n+1:n+m);
+        s   = sol(1:n);
+    else
+        x = ones(n,1);
+        s = ones(n,1);
+        y = zeros(m,1);
+    end
     tau   = 1;
     kappa =1;
     clear sol
+
+    opts
     
     if(min(x)<0) %if x is not feasible shift it into feasibility
         a = min(x);
@@ -63,12 +86,15 @@ function [x,y,s,info] = mehrotra_lp_solver(A,b,c)
     gap  = c'*x-b'*y;
     fprintf('%2i a       %3.3e pr %3.3e dr %3.3e gr %3.3e mu %3.3e gap %3.3e k/t %3.3e res_cent %3.3e\n',0,nan,nrp/(nrp0*tau),nrd/(nrd0*tau),nrg,mu,gap,kappa/tau,nan);
     
-    %Algorithm parameters
-    max_iter = 100;
+    
+    %In case we use centrality backtrack constant 
+    bk_constant = 0.8;
+    max_bk_iter     = 100;
+
     
     %--------------------------------------
     %Main SOCP solver iteration
-    for iter=1:max_iter
+    for iter=1:opts.max_iter
        
         %Evaluate the hessian and scaled variables
         %Evaluate the scaling point 
@@ -80,6 +106,23 @@ function [x,y,s,info] = mehrotra_lp_solver(A,b,c)
     
         ratios = [-x./dx;-s./ds;-tau/dtau;-kappa/dkappa;1];
         a_max  = min(ratios(find(ratios>0)));
+        
+        bk_iter_predictor = 0;
+        if(opts.use_centrality) %Find the largest alpha that keeps ||Xz-mu||^2_2 < centality
+            for bk_iter_predictor = 1:max_bk_iter
+                cent = 0;
+                if(opts.use_functional)
+                    cent = potential_centrality(x+a_max*dx,s+a_max*ds,tau+a_max*dtau,kappa+a_max*dkappa);
+                else
+                    cent = two_norm_centrality(x+a_max*dx,s+a_max*ds,tau+a_max*dtau,kappa+a_max*dkappa,mu);
+                end
+                if(cent < opts.centrality)
+                    break;
+                else
+                    a_max = a_max*bk_constant;
+                end
+            end
+        end
     
         %Now calculate the centering direction
         %-------------------------------------
@@ -88,9 +131,12 @@ function [x,y,s,info] = mehrotra_lp_solver(A,b,c)
         %Build the second order correction term, this should have a better form
         so       = (1-sigma)*dx.*ds./x;
         kt_so    = (1-sigma)*dtau*dkappa/tau;
-          
-        %so    = 0;
-        %kt_so = 0;
+        
+        %If no second order correction should be used then
+        if(~opts.secord)
+            so    = 0;
+            kt_so = 0;
+        end
         
         %Solve the affine scaling direction
         [dy_c,dx_c,dtau_c,ds_c,dkappa_c,residual_norm_c,slv_aug] = linear_solver(H,tau,kappa,A,b,c,m,n,...
@@ -105,6 +151,24 @@ function [x,y,s,info] = mehrotra_lp_solver(A,b,c)
         %Decrement 
         ratios = [-x./dx_c;-s./ds_c;-tau/dtau_c;-kappa/dkappa_c;1];
         a_max  = min(ratios(find(ratios>0)));
+        
+        
+        if(opts.use_centrality) %Find the largest alpha that keeps ||Xz-mu||^2_2 < centality
+            for bk_iter_corrector = 1:max_bk_iter
+                cent = 0;
+                if(opts.use_functional)
+                    cent = potential_centrality(x+a_max*dx_c,s+a_max*ds_c,tau+a_max*dtau_c,kappa+a_max*dkappa_c);
+                else
+                    cent = two_norm_centrality(x+a_max*dx_c,s+a_max*ds_c,tau+a_max*dtau_c,kappa+a_max*dkappa_c,mu);
+                end
+                if(cent < opts.centrality)
+                    break;
+                else
+                    a_max = a_max*bk_constant;
+                end
+            end
+        end
+
         a       = a_max*0.98; 
         % a       = min(a,1); 
         
@@ -143,8 +207,8 @@ function [x,y,s,info] = mehrotra_lp_solver(A,b,c)
         
         gap   = (mu*(nu+1)-tau*kappa)/tau;
         
-        fprintf('%2i a %3.3e s %3.3e pr %3.3e dr %3.3e gr %3.3e mu %3.3e gap %3.3e k/t %3.3e res_cent %3.3e\n',...
-                iter,a,sigma,nrp/(nrp0*tau),nrd/(nrd0*tau),nrg,mu,gap,kappa/tau,residual_norm_c);
+        fprintf('%2i a %3.3e s %3.3e pr %3.3e dr %3.3e gr %3.3e mu %3.3e gap %3.3e k/t %3.3e res_cent %3.3e bk pre %2i bk cor %2i\n',...
+                iter,a,sigma,nrp/(nrp0*tau),nrd/(nrd0*tau),nrg,mu,gap,kappa/tau,residual_norm_c,bk_iter_predictor,bk_iter_corrector);
 
         if(nrp/nrp0 < 1.e-8 && nrd/nrd0 < 1.e-8 && mu/mu0 < 1.e-8)
             break;
@@ -158,3 +222,39 @@ function [x,y,s,info] = mehrotra_lp_solver(A,b,c)
     info.iter = iter;
 end
 
+function potential = potential_centrality(x,s,t,k)
+    nu = size(x,1)+1;
+    potential = nu*log(x'*s+t*k)-sum(log(x))-sum(log(s))-log(t)-log(k) - nu*log(nu);
+end
+
+function cent = two_norm_centrality(x,s,t,k,mu)
+                act_res = ([x;t]).*([s;k])-mu; 
+                cent = norm(act_res);
+end
+
+function opts = get_default_options(opts)
+    if(~isfield(opts,'max_iter')) opts.max_iter = 100; end;
+    if(~isfield(opts,'centrality_type')) opts.centrality_type = 'none'; end
+    if(~isfield(opts,'ini_mehrotra')) opts.ini_mehrotra = true; end
+    if(~isfield(opts,'secord')) opts.secord = true; end
+    
+    %If we are using centrality then disable ini_mehrotra
+    if(strcmp(opts.centrality_type,'none')~= 1)
+        opts.ini_mehrotra = false; 
+        opts.use_centrality = true;
+
+        %if the centrality threshold is not set, then set it
+        %Unset the second order correction
+        if(strcmp(opts.centrality_type,'functional')==1)
+            if(~isfield(opts,'centrality')) opts.centrality = 1-log(2); end
+            opts.use_functional = true;
+            opts.secord = false;
+        elseif(strcmp(opts.centrality_type,'2norm')==1)
+            if(~isfield(opts,'centrality')) opts.centrality = 1; end
+            opts.use_functional = false;
+        end
+    else
+        opts.use_centrality = false;
+    end
+
+end
