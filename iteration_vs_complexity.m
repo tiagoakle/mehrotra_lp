@@ -38,6 +38,8 @@ for size_ix = 1:length(sizes)
         [x,y,s,info_cent] = mehrotra_lp_solver(A,b,c,opts);
         results(result_ix,:) = [n, info_none.iter, info_func.iter, info_cent.iter];
         result_ix = result_ix + 1;
+        fprintf('%i % i %i %i \n', n, info_none.iter, info_func.iter, info_cent.iter);
+
     end
 end
 
