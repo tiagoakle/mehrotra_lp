@@ -12,13 +12,14 @@ function [x,y,s,info] = mehrotra_lp_solver(A,b,c,opts)
    
     warning('off','MATLAB:nearlySingularMatrix');
 
-    fprintf('Minimal mehrotra type solver \n');
+    
+    if(opts.verbose) fprintf('Minimal mehrotra type solver \n'); end;
     %-----------------------------------------------------------------
     % Minimal Mehrotra LP predictor corrector
     %------------------------------------------------------------------
     [m,n] = size(A); 
     nu    = n;
-    fprintf('Problem size %i constraints %i variables \n',m,n);
+    if(opts.verbose) fprintf('Problem size %i constraints %i variables \n',m,n); end;
     %-----------------------------------
     
     if(nargin == 3)
@@ -30,8 +31,7 @@ function [x,y,s,info] = mehrotra_lp_solver(A,b,c,opts)
         bk_iter_predictor = 0;
         bk_iter_corrector = 0;
     end 
-    fprintf('\t Centrality %s, \n \t Initialization Mehrotra %g \n',opts.centrality_type,opts.ini_mehrotra);
-         
+    if(opts.verbose) fprintf('\t Centrality %s, \n \t Initialization Mehrotra %g \n',opts.centrality_type,opts.ini_mehrotra); end 
     if(opts.ini_mehrotra)
         %Initialization strategy from CVXOPT
         K2  = [[speye(n), A'];[A,sparse(m,m)]];
@@ -51,8 +51,6 @@ function [x,y,s,info] = mehrotra_lp_solver(A,b,c,opts)
     kappa =1;
     clear sol
 
-    opts
-    
     if(min(x)<0) %if x is not feasible shift it into feasibility
         a = min(x);
         x = (1-a)*ones(n,1)+x;
@@ -84,8 +82,9 @@ function [x,y,s,info] = mehrotra_lp_solver(A,b,c,opts)
     nrg0 = nrg;
     
     gap  = c'*x-b'*y;
-    fprintf('%2i a       %3.3e pr %3.3e dr %3.3e gr %3.3e mu %3.3e gap %3.3e k/t %3.3e res_cent %3.3e\n',0,nan,nrp/(nrp0*tau),nrd/(nrd0*tau),nrg,mu,gap,kappa/tau,nan);
-    
+    if(opts.verbose)
+        fprintf('%2i a       %3.3e pr %3.3e dr %3.3e gr %3.3e mu %3.3e gap %3.3e k/t %3.3e res_cent %3.3e\n',0,nan,nrp/(nrp0*tau),nrd/(nrd0*tau),nrg,mu,gap,kappa/tau,nan);
+    end 
     
     %In case we use centrality backtrack constant 
     bk_constant = 0.8;
@@ -206,10 +205,10 @@ function [x,y,s,info] = mehrotra_lp_solver(A,b,c,opts)
         nrg   = norm(rg);
         
         gap   = (mu*(nu+1)-tau*kappa)/tau;
-        
-        fprintf('%2i a %3.3e s %3.3e pr %3.3e dr %3.3e gr %3.3e mu %3.3e gap %3.3e k/t %3.3e res_cent %3.3e bk pre %2i bk cor %2i\n',...
+        if(opts.verbose)      
+            fprintf('%2i a %3.3e s %3.3e pr %3.3e dr %3.3e gr %3.3e mu %3.3e gap %3.3e k/t %3.3e res_cent %3.3e bk pre %2i bk cor %2i\n',...
                 iter,a,sigma,nrp/(nrp0*tau),nrd/(nrd0*tau),nrg,mu,gap,kappa/tau,residual_norm_c,bk_iter_predictor,bk_iter_corrector);
-
+        end
         if(nrp/nrp0 < 1.e-8 && nrd/nrd0 < 1.e-8 && mu/mu0 < 1.e-8)
             break;
         end
@@ -233,10 +232,11 @@ function cent = two_norm_centrality(x,s,t,k,mu)
 end
 
 function opts = get_default_options(opts)
-    if(~isfield(opts,'max_iter')) opts.max_iter = 100; end;
+    if(~isfield(opts,'max_iter'))        opts.max_iter        = 100   ; end
     if(~isfield(opts,'centrality_type')) opts.centrality_type = 'none'; end
-    if(~isfield(opts,'ini_mehrotra')) opts.ini_mehrotra = true; end
-    if(~isfield(opts,'secord')) opts.secord = true; end
+    if(~isfield(opts,'ini_mehrotra'))    opts.ini_mehrotra    = true  ; end
+    if(~isfield(opts,'secord'))          opts.secord          = true  ; end
+    if(~isfield(opts,'verbose'))         opts.verbose         = true  ; end
     
     %If we are using centrality then disable ini_mehrotra
     if(strcmp(opts.centrality_type,'none')~= 1)
