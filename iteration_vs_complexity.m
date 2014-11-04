@@ -3,7 +3,7 @@
 %and with a predictor-corrector with no centrality constraints
 
 sizes = [100:100:3000];
-samples = 20;
+samples = 10;
 
 results = zeros(length(sizes)*samples,4);
 result_ix = 1;
@@ -11,7 +11,7 @@ for size_ix = 1:length(sizes)
     for sample = 1:samples
         n = sizes(size_ix);
         m = ceil(n/10);
-        A = sprandn(m,n,0.8);
+        A = sprandn(m,n,0.5);
         b = A*rand(n,1);
         c = A'*randn(m,1) + rand(n,1);
 
