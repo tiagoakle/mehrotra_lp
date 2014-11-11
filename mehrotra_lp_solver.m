@@ -113,7 +113,7 @@ function [x,y,s,info] = mehrotra_lp_solver(A,b,c,opts)
                 if(opts.use_functional)
                     cent = potential_centrality(x+a_max*dx,s+a_max*ds,tau+a_max*dtau,kappa+a_max*dkappa);
                 else
-                    cent = two_norm_centrality(x+a_max*dx,s+a_max*ds,tau+a_max*dtau,kappa+a_max*dkappa,mu);
+                    cent = two_norm_centrality(x+a_max*dx,s+a_max*ds,tau+a_max*dtau,kappa+a_max*dkappa);
                 end
                 if(cent < opts.centrality)
                     break;
@@ -158,7 +158,7 @@ function [x,y,s,info] = mehrotra_lp_solver(A,b,c,opts)
                 if(opts.use_functional)
                     cent = potential_centrality(x+a_max*dx_c,s+a_max*ds_c,tau+a_max*dtau_c,kappa+a_max*dkappa_c);
                 else
-                    cent = two_norm_centrality(x+a_max*dx_c,s+a_max*ds_c,tau+a_max*dtau_c,kappa+a_max*dkappa_c,mu);
+                    cent = two_norm_centrality(x+a_max*dx_c,s+a_max*ds_c,tau+a_max*dtau_c,kappa+a_max*dkappa_c);
                 end
                 if(cent < opts.centrality)
                     break;
@@ -226,13 +226,15 @@ function potential = potential_centrality(x,s,t,k)
     potential = nu*log(x'*s+t*k)-sum(log(x))-sum(log(s))-log(t)-log(k) - nu*log(nu);
 end
 
-function cent = two_norm_centrality(x,s,t,k,mu)
+function cent = two_norm_centrality(x,s,t,k)
+                n  = size(x,1);
+                mu = (x'*s+t*k)/(n+1);
                 act_res = ([x;t]).*([s;k])-mu; 
-                cent = norm(act_res);
+                cent = norm(act_res)/mu;
 end
 
 function opts = get_default_options(opts)
-    if(~isfield(opts,'max_iter'))        opts.max_iter        = 100   ; end
+    if(~isfield(opts,'max_iter'))        opts.max_iter        = 300   ; end
     if(~isfield(opts,'centrality_type')) opts.centrality_type = 'none'; end
     if(~isfield(opts,'ini_mehrotra'))    opts.ini_mehrotra    = true  ; end
     if(~isfield(opts,'secord'))          opts.secord          = true  ; end
